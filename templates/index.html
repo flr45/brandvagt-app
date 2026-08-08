@@ -54,6 +54,11 @@
             transition: 0.2s;
             text-align: center;
         }
+        .role-button:disabled,
+        .controls button:disabled {
+            cursor: wait;
+            opacity: 0.65;
+        }
         .active {
             background-color: #2ecc71;
         }
@@ -72,6 +77,14 @@
             border: none;
             border-radius: 10px;
             cursor: pointer;
+        }
+        #status-message {
+            min-height: 24px;
+            margin: 0 20px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: #991b1b;
         }
     </style>
 </head>
@@ -95,26 +108,53 @@
         </div>
         {% endfor %}
     </div>
+    <p id="status-message" role="status" aria-live="polite"></p>
     <div class="controls">
-        <button onclick="resetAll()">🔄 Nulstil</button>
+        <button id="reset-button" onclick="resetAll()">🔄 Nulstil</button>
     </div>
     <script>
-        function toggleStatus(vehicle, role, btn) {
-            fetch("/toggle", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ vehicle, role })
-            })
-            .then(res => res.json())
-            .then(data => {
-                btn.classList.toggle("active", data.active);
-                btn.classList.toggle("inactive", !data.active);
-            });
+        const statusMessage = document.getElementById("status-message");
+
+        function showError(message) {
+            statusMessage.textContent = message;
         }
 
-        function resetAll() {
-            fetch("/reset", { method: "POST" })
-                .then(() => location.reload());
+        async function toggleStatus(vehicle, role, btn) {
+            if (btn.disabled) return;
+            btn.disabled = true;
+            showError("");
+            try {
+                const res = await fetch("/toggle", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ vehicle, role })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || typeof data.active !== "boolean") {
+                    throw new Error(data.error || "Status kunne ikke gemmes.");
+                }
+                btn.classList.toggle("active", data.active);
+                btn.classList.toggle("inactive", !data.active);
+            } catch (error) {
+                showError(error instanceof Error ? error.message : "Status kunne ikke gemmes.");
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function resetAll() {
+            const button = document.getElementById("reset-button");
+            if (button.disabled) return;
+            button.disabled = true;
+            showError("");
+            try {
+                const res = await fetch("/reset", { method: "POST" });
+                if (!res.ok) throw new Error("Nulstilling kunne ikke gemmes.");
+                location.reload();
+            } catch (error) {
+                showError(error instanceof Error ? error.message : "Nulstilling kunne ikke gemmes.");
+                button.disabled = false;
+            }
         }
     </script>
 </body>
